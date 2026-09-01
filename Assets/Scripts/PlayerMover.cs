@@ -24,6 +24,7 @@ public sealed class PlayerMover : MonoBehaviour
     private float stepCycle;
     private bool wasGrounded;
     private bool thirdPersonPreview;
+    private bool crouched;
     private float previewYaw;
     private float previewElevation = 18f;
 
@@ -81,7 +82,8 @@ public sealed class PlayerMover : MonoBehaviour
             return;
         }
 
-        bool crouched = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.C);
+        bool wantsCrouch = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.C);
+        crouched = wantsCrouch || (crouched && !CanStand());
         Vector3 moveInput = ReadMovement();
         bool sprinting = Input.GetKey(KeyCode.LeftShift) && !crouched && moveInput.sqrMagnitude > 0.1f && stamina > 0.04f && !IsCarrying;
         Move(moveInput, sprinting, crouched);
@@ -129,14 +131,29 @@ public sealed class PlayerMover : MonoBehaviour
         controller.height = Mathf.MoveTowards(controller.height, crouched ? 1.25f : 1.85f, Time.deltaTime * 5f);
         controller.center = new Vector3(0f, controller.height * 0.5f, 0f);
         controller.Move(velocity * Time.deltaTime);
-        bodyRig?.SetPose(input.magnitude, Vector3.Dot(input, transform.right), grounded, crouched, sprinting, stunRemaining, IsCarrying);
+        bodyRig?.SetPose(input.magnitude, Vector3.Dot(input, transform.right), grounded, crouched, sprinting, verticalVelocity, stunRemaining, IsCarrying);
     }
 
     private void MoveStunned()
     {
         verticalVelocity += Physics.gravity.y * Time.deltaTime;
         controller.Move((Vector3.down * 1.5f + transform.right * Mathf.Sin(Time.time * 9f) * 0.25f) * Time.deltaTime);
-        bodyRig?.SetPose(0f, 0f, controller.isGrounded, true, false, stunRemaining, false);
+        bodyRig?.SetPose(0f, 0f, controller.isGrounded, true, false, verticalVelocity, stunRemaining, false);
+    }
+
+    private bool CanStand()
+    {
+        const float standingHeight = 1.85f;
+        float radius = controller.radius * 0.94f;
+        Vector3 feet = transform.position + Vector3.up * radius;
+        Vector3 head = transform.position + Vector3.up * (standingHeight - radius);
+        Collider[] overlaps = Physics.OverlapCapsule(feet, head, radius, ~0, QueryTriggerInteraction.Ignore);
+        foreach (Collider overlap in overlaps)
+        {
+            if (overlap == controller || overlap.transform.root == transform.root) continue;
+            return false;
+        }
+        return true;
     }
 
     private void Look()

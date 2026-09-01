@@ -19,6 +19,12 @@ public sealed class MoverLoadResponse : MonoBehaviour
     public float SwayAmount => Mathf.Lerp(0.012f, 0.075f, LoadFactor) + Mathf.Lerp(0f, 0.045f, ExtremeLoadFactor);
     public Vector3 CompensationLocal { get; private set; }
 
+    private void Awake()
+    {
+        if (GetComponent<MoverSafetyGear>() == null)
+            gameObject.AddComponent<MoverSafetyGear>();
+    }
+
     public void SetLoad(float mass, Vector3 worldCenter, bool carrying)
     {
         if (!carrying || mass <= 0.01f)

@@ -45,8 +45,12 @@ public sealed class JobHUD : MonoBehaviour
                         "    Earned: $" + job.Earned + "    Damage: -$" + job.Fines +
                         "    Current pay: $" + job.FinalPay + "\n" + job.LastEvent;
         GUI.Label(new Rect(24f, 22f, 850f, 140f), status, titleStyle);
-        GUI.Label(new Rect(24f, Screen.height - 70f, 850f, 50f),
-            "WASD move   E grab/drop   F drive/exit   Space jump   R restart\nSOFA + FRIDGE: two movers required", helpStyle);
+        PlayerMover player = PlayerMover.Local;
+        string physicalState = player == null ? "" :
+            "   Stamina: " + Mathf.RoundToInt(player.Stamina * 100f) + "%   Hand reach: " + player.GripReach.ToString("0.0") + "m";
+        GUI.Label(new Rect(24f, Screen.height - 92f, 1000f, 74f),
+            "LMB left hand   RMB right hand   Mouse wheel reach   E release both" + physicalState +
+            "\nWASD move   Shift sprint   Ctrl crouch   Space jump   F drive   R restart\nSOFA + FRIDGE require TWO DIFFERENT MOVERS", helpStyle);
         GUI.Label(new Rect(Screen.width * 0.5f - 8f, Screen.height * 0.5f - 14f, 20f, 28f), "+", titleStyle);
     }
 }

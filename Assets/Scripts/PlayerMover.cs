@@ -6,39 +6,58 @@ public sealed class PlayerMover : MonoBehaviour
 {
     private CharacterController controller;
     private Camera view;
-    private CarryableItem heldItem;
+    private FirstPersonBody bodyRig;
+    private CarryableItem leftItem;
+    private CarryableItem rightItem;
     private VanController drivingVan;
-    private float verticalVelocity;
-    private float pitch;
-    private float enteredVanAt;
+    private Transform leftGripPoint;
+    private Transform rightGripPoint;
     private Transform originalCameraParent;
     private Vector3 originalCameraPosition;
-    private Renderer[] bodyRenderers;
+    private float verticalVelocity;
+    private float pitch;
+    private float stamina = 1f;
+    private float gripReach = 1.55f;
+    private float enteredVanAt;
+    private float stunRemaining;
+    private float cameraRoll;
+    private float stepCycle;
+    private bool wasGrounded;
 
-    public Transform GrabPoint { get; private set; }
+    public static PlayerMover Local { get; private set; }
+    public Transform GrabPoint => leftGripPoint;
+    public Transform LeftGripPoint => leftGripPoint;
+    public Transform RightGripPoint => rightGripPoint;
+    public float Stamina => stamina;
+    public float GripReach => gripReach;
+    public bool IsStunned => stunRemaining > 0f;
+    public bool IsCarrying => leftItem != null || rightItem != null;
 
     private void Awake()
     {
+        Local = this;
         controller = GetComponent<CharacterController>();
         view = GetComponentInChildren<Camera>();
-        bodyRenderers = GetComponentsInChildren<Renderer>();
+        bodyRig = GetComponent<FirstPersonBody>();
         originalCameraParent = view.transform.parent;
         originalCameraPosition = view.transform.localPosition;
-
-        GrabPoint = new GameObject("Physical grab target").transform;
-        GrabPoint.SetParent(view.transform, false);
-        GrabPoint.localPosition = new Vector3(0f, -0.28f, 2.15f);
+        leftGripPoint = CreateGripPoint("Left physical hand", -0.32f);
+        rightGripPoint = CreateGripPoint("Right physical hand", 0.32f);
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
 
+    private Transform CreateGripPoint(string objectName, float horizontal)
+    {
+        Transform point = new GameObject(objectName).transform;
+        point.SetParent(view.transform, false);
+        point.localPosition = new Vector3(horizontal, -0.30f, gripReach);
+        return point;
+    }
+
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            Cursor.lockState = Cursor.lockState == CursorLockMode.Locked ? CursorLockMode.None : CursorLockMode.Locked;
-            Cursor.visible = Cursor.lockState != CursorLockMode.Locked;
-        }
+        if (Input.GetKeyDown(KeyCode.Escape)) ToggleCursor();
         if (Input.GetKeyDown(KeyCode.R)) SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
 
         if (drivingVan != null)
@@ -48,60 +67,169 @@ public sealed class PlayerMover : MonoBehaviour
             return;
         }
 
-        Move();
         Look();
-        if (Input.GetKeyDown(KeyCode.E))
+        UpdateGripReach();
+        if (stunRemaining > 0f)
         {
-            if (heldItem == null) TryGrab(); else ReleaseHeld();
+            stunRemaining -= Time.deltaTime;
+            MoveStunned();
+            UpdateCamera(Vector3.zero, false, false);
+            return;
         }
+
+        bool crouched = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.C);
+        Vector3 moveInput = ReadMovement();
+        bool sprinting = Input.GetKey(KeyCode.LeftShift) && !crouched && moveInput.sqrMagnitude > 0.1f && stamina > 0.04f && !IsCarrying;
+        Move(moveInput, sprinting, crouched);
+        HandleHands();
         if (Input.GetKeyDown(KeyCode.F)) TryEnterVan();
+        UpdateCamera(moveInput, sprinting, crouched);
     }
 
-    private void Move()
+    private void ToggleCursor()
     {
-        float speed = 5.3f;
-        if (heldItem != null) speed *= heldItem.HolderCount < heldItem.MinimumCarriers ? 0.42f : 0.72f;
+        Cursor.lockState = Cursor.lockState == CursorLockMode.Locked ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = Cursor.lockState != CursorLockMode.Locked;
+    }
+
+    private Vector3 ReadMovement()
+    {
         Vector3 input = transform.right * Input.GetAxisRaw("Horizontal") + transform.forward * Input.GetAxisRaw("Vertical");
-        input = Vector3.ClampMagnitude(input, 1f);
-        if (controller.isGrounded)
+        return Vector3.ClampMagnitude(input, 1f);
+    }
+
+    private void Move(Vector3 input, bool sprinting, bool crouched)
+    {
+        bool grounded = controller.isGrounded;
+        if (grounded)
         {
-            verticalVelocity = -1.5f;
-            if (Input.GetKeyDown(KeyCode.Space) && heldItem == null) verticalVelocity = 5.2f;
+            if (!wasGrounded && verticalVelocity < -10.5f) Stumble(Mathf.InverseLerp(-10.5f, -22f, verticalVelocity), -transform.forward);
+            verticalVelocity = -1.7f;
+            if (Input.GetKeyDown(KeyCode.Space) && !crouched && !IsCarrying) verticalVelocity = 5.2f;
         }
         else verticalVelocity += Physics.gravity.y * Time.deltaTime;
+        wasGrounded = grounded;
+
+        float speed = crouched ? 2.25f : sprinting ? 6.6f : 4.35f;
+        if (IsCarrying)
+        {
+            int required = Mathf.Max(leftItem != null ? leftItem.MinimumCarriers : 1, rightItem != null ? rightItem.MinimumCarriers : 1);
+            int carriers = Mathf.Max(leftItem != null ? leftItem.HolderCount : 0, rightItem != null ? rightItem.HolderCount : 0);
+            speed *= carriers < required ? 0.28f : 0.67f;
+        }
+        if (sprinting) stamina = Mathf.Max(0f, stamina - Time.deltaTime * 0.24f);
+        else stamina = Mathf.Min(1f, stamina + Time.deltaTime * (IsCarrying ? 0.10f : 0.18f));
+
         Vector3 velocity = input * speed;
         velocity.y = verticalVelocity;
+        controller.height = Mathf.MoveTowards(controller.height, crouched ? 1.25f : 1.85f, Time.deltaTime * 5f);
+        controller.center = new Vector3(0f, controller.height * 0.5f, 0f);
         controller.Move(velocity * Time.deltaTime);
+        bodyRig?.SetPose(input.magnitude, Vector3.Dot(input, transform.right), grounded, crouched, sprinting, stunRemaining, IsCarrying);
+    }
+
+    private void MoveStunned()
+    {
+        verticalVelocity += Physics.gravity.y * Time.deltaTime;
+        controller.Move((Vector3.down * 1.5f + transform.right * Mathf.Sin(Time.time * 9f) * 0.25f) * Time.deltaTime);
+        bodyRig?.SetPose(0f, 0f, controller.isGrounded, true, false, stunRemaining, false);
     }
 
     private void Look()
     {
         if (Cursor.lockState != CursorLockMode.Locked) return;
-        float x = Input.GetAxis("Mouse X") * 2.1f;
-        float y = Input.GetAxis("Mouse Y") * 2.1f;
-        pitch = Mathf.Clamp(pitch - y, -78f, 78f);
-        view.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+        float x = Input.GetAxis("Mouse X") * 2.0f;
+        float y = Input.GetAxis("Mouse Y") * 2.0f;
+        pitch = Mathf.Clamp(pitch - y, -82f, 82f);
         if (drivingVan == null) transform.Rotate(Vector3.up * x);
+        else view.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
     }
 
-    private void TryGrab()
+    private void UpdateCamera(Vector3 input, bool sprinting, bool crouched)
     {
-        if (!Physics.Raycast(view.transform.position, view.transform.forward, out RaycastHit hit, 3.6f, ~0, QueryTriggerInteraction.Ignore)) return;
+        float movement = new Vector3(input.x, 0f, input.z).magnitude;
+        if (controller.isGrounded) stepCycle += movement * Time.deltaTime * (sprinting ? 13f : 9f);
+        float bob = controller.isGrounded ? Mathf.Sin(stepCycle) * 0.025f * movement : 0f;
+        float sideBob = controller.isGrounded ? Mathf.Cos(stepCycle * 0.5f) * 0.018f * movement : 0f;
+        float targetHeight = crouched ? 1.08f : 1.62f;
+        Vector3 target = new Vector3(sideBob, targetHeight + bob, originalCameraPosition.z);
+        view.transform.localPosition = Vector3.Lerp(view.transform.localPosition, target, Time.deltaTime * 12f);
+        cameraRoll = Mathf.Lerp(cameraRoll, IsStunned ? Mathf.Sin(Time.time * 8f) * 18f : -Vector3.Dot(input, transform.right) * 1.8f, Time.deltaTime * 7f);
+        view.transform.localRotation = Quaternion.Euler(pitch, 0f, cameraRoll);
+    }
+
+    private void HandleHands()
+    {
+        if (Input.GetMouseButtonDown(0)) ToggleHand(true);
+        if (Input.GetMouseButtonDown(1)) ToggleHand(false);
+        if (Input.GetKeyDown(KeyCode.E)) ReleaseAllHands();
+    }
+
+    private void ToggleHand(bool left)
+    {
+        CarryableItem current = left ? leftItem : rightItem;
+        if (current != null)
+        {
+            current.ReleaseHand(this, left);
+            SetHeld(left, null);
+            return;
+        }
+        if (!Physics.Raycast(view.transform.position, view.transform.forward, out RaycastHit hit, gripReach + 1.2f, ~0, QueryTriggerInteraction.Ignore)) return;
         CarryableItem item = hit.collider.GetComponentInParent<CarryableItem>();
-        if (item != null && item.TryGrab(this)) heldItem = item;
+        Transform anchor = left ? leftGripPoint : rightGripPoint;
+        if (item != null && item.TryGrabHand(this, left, anchor)) SetHeld(left, item);
     }
 
-    private void ReleaseHeld()
+    private void SetHeld(bool left, CarryableItem item)
     {
-        if (heldItem == null) return;
-        CarryableItem item = heldItem;
-        heldItem = null;
-        item.Release(this);
+        if (left) leftItem = item;
+        else rightItem = item;
+        bodyRig?.SetHandGrip(left, item != null);
     }
 
-    public void ForceRelease(CarryableItem item)
+    private void UpdateGripReach()
     {
-        if (heldItem == item) heldItem = null;
+        float wheel = Input.mouseScrollDelta.y;
+        if (!Mathf.Approximately(wheel, 0f)) gripReach = Mathf.Clamp(gripReach + wheel * 0.18f, 0.85f, 2.45f);
+        leftGripPoint.localPosition = new Vector3(-0.32f, -0.30f, gripReach);
+        rightGripPoint.localPosition = new Vector3(0.32f, -0.30f, gripReach);
+    }
+
+    public void ForceRelease(CarryableItem item, bool left)
+    {
+        if (left && leftItem == item) SetHeld(true, null);
+        if (!left && rightItem == item) SetHeld(false, null);
+    }
+
+    public void ReleaseAllHands()
+    {
+        CarryableItem left = leftItem;
+        CarryableItem right = rightItem;
+        if (left != null) left.ReleaseHand(this, true);
+        if (right != null) right.ReleaseHand(this, false);
+        SetHeld(true, null);
+        SetHeld(false, null);
+    }
+
+    public void Stumble(float severity, Vector3 direction)
+    {
+        if (severity < 0.12f || drivingVan != null) return;
+        stunRemaining = Mathf.Max(stunRemaining, Mathf.Lerp(0.35f, 1.6f, Mathf.Clamp01(severity)));
+        ReleaseAllHands();
+        cameraRoll = Mathf.Sign(Vector3.Dot(direction, transform.right)) * 22f;
+    }
+
+    private void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        Rigidbody hitBody = hit.rigidbody;
+        if (hitBody == null || hitBody.isKinematic) return;
+        float incoming = hitBody.linearVelocity.magnitude;
+        if (incoming > 6.5f && hitBody.mass > 20f) Stumble(Mathf.InverseLerp(6.5f, 15f, incoming), hitBody.linearVelocity.normalized);
+        if (hit.moveDirection.y > -0.25f && hitBody.mass < 90f)
+        {
+            float push = Mathf.Lerp(55f, 12f, Mathf.InverseLerp(5f, 90f, hitBody.mass));
+            hitBody.AddForceAtPosition(new Vector3(hit.moveDirection.x, 0f, hit.moveDirection.z) * push, hit.point, ForceMode.Force);
+        }
     }
 
     private void TryEnterVan()
@@ -117,11 +245,11 @@ public sealed class PlayerMover : MonoBehaviour
 
     private void BeginDriving(VanController van)
     {
-        ReleaseHeld();
+        ReleaseAllHands();
         drivingVan = van;
         enteredVanAt = Time.time;
         controller.enabled = false;
-        foreach (Renderer renderer in bodyRenderers) renderer.enabled = false;
+        bodyRig?.SetVisible(false);
         view.transform.SetParent(van.Seat, false);
         view.transform.localPosition = Vector3.zero;
         view.transform.localRotation = Quaternion.identity;
@@ -139,7 +267,7 @@ public sealed class PlayerMover : MonoBehaviour
         view.transform.SetParent(originalCameraParent, false);
         view.transform.localPosition = originalCameraPosition;
         view.transform.localRotation = Quaternion.identity;
-        foreach (Renderer renderer in bodyRenderers) renderer.enabled = true;
+        bodyRig?.SetVisible(true);
         controller.enabled = true;
     }
 }

@@ -143,11 +143,6 @@ public sealed class PrototypeWorld : MonoBehaviour
         controller.radius = 0.36f;
         controller.center = new Vector3(0f, 0.93f, 0f);
 
-        UnityEngine.Material uniform = Material(new Color(0.92f, 0.40f, 0.05f), 0f, 0.25f);
-        UnityEngine.Material skin = Material(new Color(0.82f, 0.60f, 0.42f), 0f, 0.25f);
-        Visual(player.transform, "Stylized long body for other players", new Vector3(0f, 0.95f, 0f), new Vector3(0.58f, 1.25f, 0.42f), uniform, PrimitiveType.Capsule);
-        Visual(player.transform, "Head", new Vector3(0f, 1.75f, 0f), Vector3.one * 0.48f, skin, PrimitiveType.Sphere);
-
         GameObject cameraObject = new GameObject("First-person camera");
         cameraObject.tag = "MainCamera";
         cameraObject.transform.SetParent(player.transform, false);
@@ -156,6 +151,7 @@ public sealed class PrototypeWorld : MonoBehaviour
         camera.fieldOfView = 78f;
         camera.nearClipPlane = 0.06f;
         cameraObject.AddComponent<AudioListener>();
+        player.AddComponent<FirstPersonBody>();
         player.AddComponent<PlayerMover>();
     }
 

@@ -4,18 +4,29 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 public sealed class CarryableItem : MonoBehaviour
 {
-    private readonly List<PlayerMover> holders = new();
+    private sealed class PlayerGrip
+    {
+        public Transform Left;
+        public Transform Right;
+        public int HandCount => (Left != null ? 1 : 0) + (Right != null ? 1 : 0);
+    }
+
+    private readonly Dictionary<PlayerMover, PlayerGrip> grips = new();
+    private readonly List<PlayerMover> cleanup = new();
     private Rigidbody body;
+    private Collider itemCollider;
     private float condition = 1f;
     private float lastDamageTime;
     private float fragility = 1f;
+    private float coordinationStress;
     private bool delivered;
 
     public string DisplayName { get; private set; } = "Cargo";
     public int MinimumCarriers { get; private set; } = 1;
     public int BaseValue { get; private set; } = 100;
-    public int HolderCount => holders.Count;
+    public int HolderCount => grips.Count;
     public float Condition => condition;
+    public float Mass => body != null ? body.mass : 0f;
 
     public void Configure(string itemName, int minimumCarriers, int value, float itemFragility)
     {
@@ -28,79 +39,132 @@ public sealed class CarryableItem : MonoBehaviour
     private void Awake()
     {
         body = GetComponent<Rigidbody>();
+        itemCollider = GetComponent<Collider>();
+        body.maxAngularVelocity = 8f;
         JobManager.Instance?.Register(this);
     }
 
     private void Start() => JobManager.Instance?.Register(this);
 
-    public bool TryGrab(PlayerMover player)
+    public bool TryGrabHand(PlayerMover player, bool left, Transform anchor)
     {
-        if (delivered || holders.Contains(player) || holders.Count >= 4) return false;
-        holders.Add(player);
+        if (delivered || player == null || anchor == null) return false;
+        if (!grips.TryGetValue(player, out PlayerGrip grip))
+        {
+            grip = new PlayerGrip();
+            grips.Add(player, grip);
+        }
+        if (left)
+        {
+            if (grip.Left != null) return false;
+            grip.Left = anchor;
+        }
+        else
+        {
+            if (grip.Right != null) return false;
+            grip.Right = anchor;
+        }
         body.WakeUp();
         return true;
     }
 
-    public void Release(PlayerMover player) => holders.Remove(player);
+    public void ReleaseHand(PlayerMover player, bool left)
+    {
+        if (!grips.TryGetValue(player, out PlayerGrip grip)) return;
+        if (left) grip.Left = null;
+        else grip.Right = null;
+        if (grip.HandCount == 0) grips.Remove(player);
+    }
 
     public void ReleaseAll()
     {
-        PlayerMover[] copy = holders.ToArray();
-        holders.Clear();
-        foreach (PlayerMover holder in copy) holder.ForceRelease(this);
+        cleanup.Clear();
+        cleanup.AddRange(grips.Keys);
+        foreach (PlayerMover player in cleanup)
+        {
+            if (player == null) continue;
+            player.ForceRelease(this, true);
+            player.ForceRelease(this, false);
+        }
+        grips.Clear();
     }
 
     private void FixedUpdate()
     {
-        holders.RemoveAll(holder => holder == null);
-        if (holders.Count == 0 || delivered) return;
+        RemoveBrokenGrips();
+        if (grips.Count == 0 || delivered) return;
 
-        for (int i = holders.Count - 1; i >= 0; i--)
+        int handCount = 0;
+        Vector3 averageTarget = Vector3.zero;
+        foreach (PlayerGrip grip in grips.Values)
         {
-            if (Vector3.Distance(holders[i].GrabPoint.position, body.worldCenterOfMass) <= 4.4f) continue;
-            PlayerMover lost = holders[i];
-            holders.RemoveAt(i);
-            lost.ForceRelease(this);
+            if (grip.Left != null) { averageTarget += grip.Left.position; handCount++; }
+            if (grip.Right != null) { averageTarget += grip.Right.position; handCount++; }
+        }
+        if (handCount == 0) return;
+        averageTarget /= handCount;
+
+        bool enoughMovers = grips.Count >= MinimumCarriers;
+        float widestGrip = 0f;
+        foreach (PlayerGrip grip in grips.Values)
+        {
+            ApplyHandForce(grip.Left, averageTarget, enoughMovers, ref widestGrip);
+            ApplyHandForce(grip.Right, averageTarget, enoughMovers, ref widestGrip);
         }
 
-        if (holders.Count >= 2 && Vector3.Distance(holders[0].transform.position, holders[1].transform.position) > 5.8f)
+        if (!enoughMovers && body.linearVelocity.y > 0f)
+            body.AddForce(Vector3.down * body.linearVelocity.y * 18f, ForceMode.Acceleration);
+
+        float badCoordination = Mathf.InverseLerp(1.35f, 2.8f, widestGrip) + Mathf.InverseLerp(5f, 11f, body.angularVelocity.magnitude);
+        coordinationStress = Mathf.MoveTowards(coordinationStress, badCoordination, Time.fixedDeltaTime * (badCoordination > coordinationStress ? 1.8f : 1.2f));
+        if (coordinationStress > 0.92f && grips.Count >= 2)
         {
+            ApplyDamage(0.035f, "movers lost coordination");
             ReleaseAll();
-            ApplyDamage(0.05f, "team lost grip");
-            return;
+            coordinationStress = 0f;
         }
-        if (holders.Count == 0) return;
+    }
 
-        Vector3 target = Vector3.zero;
-        foreach (PlayerMover holder in holders) target += holder.GrabPoint.position;
-        target /= holders.Count;
+    private void ApplyHandForce(Transform hand, Vector3 averageTarget, bool enoughMovers, ref float widestGrip)
+    {
+        if (hand == null) return;
+        widestGrip = Mathf.Max(widestGrip, Vector3.Distance(hand.position, averageTarget));
+        Vector3 closest = itemCollider.ClosestPoint(hand.position);
+        Vector3 error = hand.position - closest;
+        float spring = enoughMovers ? 42f : 9f;
+        float damping = enoughMovers ? 7.5f : 4f;
+        Vector3 force = error * spring - body.GetPointVelocity(closest) * damping;
+        force = Vector3.ClampMagnitude(force, enoughMovers ? 85f : 15f);
+        if (!enoughMovers) force.y = Mathf.Min(force.y, 1.5f);
+        body.AddForceAtPosition(force, closest, ForceMode.Acceleration);
+    }
 
-        bool enoughMovers = holders.Count >= MinimumCarriers;
-        if (!enoughMovers) target.y = Mathf.Min(body.worldCenterOfMass.y, target.y - 0.65f);
-
-        float spring = enoughMovers ? 34f : 8f;
-        float damping = enoughMovers ? 7f : 4f;
-        Vector3 acceleration = (target - body.worldCenterOfMass) * spring - body.linearVelocity * damping;
-        acceleration = Vector3.ClampMagnitude(acceleration, enoughMovers ? 75f : 16f);
-        if (!enoughMovers) acceleration.y = Mathf.Min(0f, acceleration.y);
-        body.AddForce(acceleration, ForceMode.Acceleration);
-
-        if (enoughMovers && holders.Count >= 2)
+    private void RemoveBrokenGrips()
+    {
+        cleanup.Clear();
+        foreach (KeyValuePair<PlayerMover, PlayerGrip> pair in grips)
         {
-            Vector3 line = holders[1].transform.position - holders[0].transform.position;
-            line.y = 0f;
-            if (line.sqrMagnitude > 0.2f)
+            PlayerMover player = pair.Key;
+            PlayerGrip grip = pair.Value;
+            bool invalid = player == null || grip.HandCount == 0;
+            if (!invalid) invalid = Vector3.Distance(player.transform.position, body.worldCenterOfMass) > 4.8f;
+            if (invalid) cleanup.Add(player);
+        }
+        foreach (PlayerMover player in cleanup)
+        {
+            if (player != null)
             {
-                Quaternion desired = Quaternion.LookRotation(Vector3.Cross(Vector3.up, line.normalized), Vector3.up);
-                body.MoveRotation(Quaternion.Slerp(body.rotation, desired, Time.fixedDeltaTime * 2.2f));
+                player.ForceRelease(this, true);
+                player.ForceRelease(this, false);
             }
+            grips.Remove(player);
         }
     }
 
     private void OnCollisionEnter(Collision collision)
     {
         float impact = collision.relativeVelocity.magnitude;
-        if (impact > 3.4f) ApplyDamage((impact - 3.4f) * 0.018f * fragility, "impact");
+        if (impact > 3.2f) ApplyDamage((impact - 3.2f) * 0.018f * fragility, "impact");
     }
 
     private void ApplyDamage(float amount, string reason)

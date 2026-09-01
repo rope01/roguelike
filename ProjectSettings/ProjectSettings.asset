@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!129 &1
+PlayerSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 28
+  productGUID: 6eeabda889f44dcaa826967f028da277
+  companyName: Rope01 Games
+  productName: Moving Crew Prototype
+  defaultScreenWidth: 1280
+  defaultScreenHeight: 720
+  defaultScreenWidthWeb: 960
+  defaultScreenHeightWeb: 600
+  m_ActiveColorSpace: 1
+  runInBackground: 1
+  captureSingleScreen: 0
+  usePlayerLog: 1
+  resizableWindow: 1
+  visibleInBackground: 1
+  allowFullscreenSwitch: 1
+  fullscreenMode: 3
+  forceSingleInstance: 0
+  useFlipModelSwapchain: 1
+  scriptingBackend:
+    Standalone: 0
+  il2cppCompilerConfiguration: 0
+  managedStrippingLevel: 1
+  activeInputHandler: 0
+  applicationIdentifier:
+    Standalone: com.rope01.movingcrew
+  buildNumber:
+    Standalone: 0
+  metroPackageVersion: 1.0.0.0
+  bundleVersion: 0.1.0
+  targetFrameRate: 0
+  useHDRDisplay: 0

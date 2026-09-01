@@ -18,6 +18,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	position += direction * speed * delta
+	rotation += delta * 7.0
 	lifetime -= delta
 	if lifetime <= 0.0:
 		queue_free()
@@ -28,6 +29,8 @@ func _on_body_entered(body: Node) -> void:
 		queue_free()
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, 6.0, Color("ffe66d"))
-	draw_circle(Vector2.ZERO, 9.0, Color(1.0, 0.9, 0.35, 0.22))
-
+	# Снаряд — светящаяся восьмая нота.
+	draw_circle(Vector2(-3, 5), 5.0, Color("ffe28a"))
+	draw_line(Vector2(1, 5), Vector2(1, -10), Color("ffe28a"), 3.0)
+	draw_arc(Vector2(6, -8), 6.0, PI, TAU, 10, Color("ffe28a"), 3.0)
+	draw_circle(Vector2.ZERO, 12.0, Color(1.0, 0.82, 0.35, 0.12))

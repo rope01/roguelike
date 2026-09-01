@@ -28,7 +28,9 @@ func _physics_process(delta: float) -> void:
 	velocity = direction * speed
 	move_and_slide()
 	var screen := get_viewport_rect().size
-	position = position.clamp(Vector2(30, 30), screen - Vector2(30, 30))
+	var from_center := position - screen / 2.0
+	if from_center.length() > 245.0:
+		position = screen / 2.0 + from_center.normalized() * 245.0
 	look_at(get_global_mouse_position())
 	fire_timer -= delta
 	invulnerability -= delta
@@ -62,9 +64,13 @@ func upgrade() -> void:
 
 func _draw() -> void:
 	var flash := invulnerability > 0.0 and int(invulnerability * 16.0) % 2 == 0
-	var body_color := Color(1.0, 1.0, 1.0, 0.35) if flash else Color("48e5c2")
-	draw_circle(Vector2.ZERO, 18.0, body_color)
-	draw_circle(Vector2.ZERO, 18.0, Color("b9fff1"), false, 3.0)
-	draw_polygon(PackedVector2Array([Vector2(8, -8), Vector2(29, 0), Vector2(8, 8)]), PackedColorArray([Color("eafffb")]))
-	draw_circle(Vector2.ZERO, 5.0, Color("10233b"))
-
+	var cloak := Color(1.0, 1.0, 1.0, 0.35) if flash else Color("394b73")
+	# Плащ и голова грустного странствующего музыканта — вид сверху.
+	draw_polygon(PackedVector2Array([Vector2(-18, -15), Vector2(15, -12), Vector2(19, 13), Vector2(-18, 16)]), PackedColorArray([cloak]))
+	draw_circle(Vector2(-5, 0), 11.0, Color("e8c7a1"))
+	draw_arc(Vector2(-7, 0), 11.5, -2.2, 2.2, 18, Color("25304a"), 5.0)
+	# Маленькая лютня; её струны выпускают ноты.
+	draw_circle(Vector2(12, 4), 9.0, Color("b9784b"))
+	draw_line(Vector2(15, 1), Vector2(31, -8), Color("d8a36c"), 5.0)
+	draw_line(Vector2(3, -7), Vector2(20, 11), Color("f3d39c"), 1.4)
+	draw_circle(Vector2(12, 4), 3.0, Color("563629"))

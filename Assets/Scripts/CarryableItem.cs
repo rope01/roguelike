@@ -27,6 +27,7 @@ public sealed class CarryableItem : MonoBehaviour
     public int HolderCount => grips.Count;
     public float Condition => condition;
     public float Mass => body != null ? body.mass : 0f;
+    public Vector3 WorldCenterOfMass => body != null ? body.worldCenterOfMass : transform.position;
 
     public void Configure(string itemName, int minimumCarriers, int value, float itemFragility)
     {
@@ -54,6 +55,7 @@ public sealed class CarryableItem : MonoBehaviour
             grip = new PlayerGrip();
             grips.Add(player, grip);
         }
+
         if (left)
         {
             if (grip.Left != null) return false;
@@ -64,7 +66,41 @@ public sealed class CarryableItem : MonoBehaviour
             if (grip.Right != null) return false;
             grip.Right = anchor;
         }
+
         body.WakeUp();
+        return true;
+    }
+
+    public bool TryGetHandContact(PlayerMover player, bool left, out Vector3 position, out Vector3 normal)
+    {
+        position = transform.position;
+        normal = Vector3.up;
+        if (player == null || itemCollider == null || delivered) return false;
+
+        Bounds bounds = itemCollider.bounds;
+        Vector3 towardPlayer = player.transform.position - bounds.center;
+        towardPlayer.y = 0f;
+        if (towardPlayer.sqrMagnitude < 0.001f) towardPlayer = -player.transform.forward;
+        towardPlayer.Normalize();
+
+        float side = left ? -1f : 1f;
+        float horizontalExtent = Mathf.Max(0.18f, Mathf.Max(bounds.extents.x, bounds.extents.z));
+        float sideReach = Mathf.Clamp(horizontalExtent * 0.72f, 0.16f, 0.72f);
+        float frontReach = horizontalExtent + 0.55f;
+        float downwardBias = Mathf.Min(bounds.extents.y * 0.42f, player.LoadFactor * 0.34f);
+
+        Vector3 seed = bounds.center
+            + player.transform.right * side * sideReach
+            + towardPlayer * frontReach
+            + Vector3.down * downwardBias;
+
+        position = itemCollider.ClosestPoint(seed);
+        Vector3 outward = seed - position;
+        if (outward.sqrMagnitude < 0.0001f) outward = towardPlayer + player.transform.right * side * 0.25f;
+        normal = outward.normalized;
+
+        // Keep the glove microscopically outside the collider so it reads as contact instead of clipping.
+        position += normal * 0.018f;
         return true;
     }
 
@@ -129,13 +165,17 @@ public sealed class CarryableItem : MonoBehaviour
     {
         if (hand == null) return;
         widestGrip = Mathf.Max(widestGrip, Vector3.Distance(hand.position, averageTarget));
+
         Vector3 closest = itemCollider.ClosestPoint(hand.position);
         Vector3 error = hand.position - closest;
-        float spring = enoughMovers ? 42f : 9f;
-        float damping = enoughMovers ? 7.5f : 4f;
+        float massLoad = Mathf.Clamp01(body.mass / 150f);
+        float spring = enoughMovers ? Mathf.Lerp(46f, 18f, massLoad) : 7f;
+        float damping = enoughMovers ? Mathf.Lerp(8.2f, 4.8f, massLoad) : 3.5f;
+        float maxAcceleration = enoughMovers ? Mathf.Lerp(90f, 26f, massLoad) : 12f;
+
         Vector3 force = error * spring - body.GetPointVelocity(closest) * damping;
-        force = Vector3.ClampMagnitude(force, enoughMovers ? 85f : 15f);
-        if (!enoughMovers) force.y = Mathf.Min(force.y, 1.5f);
+        force = Vector3.ClampMagnitude(force, maxAcceleration);
+        if (!enoughMovers) force.y = Mathf.Min(force.y, 1.2f);
         body.AddForceAtPosition(force, closest, ForceMode.Acceleration);
     }
 
@@ -150,6 +190,7 @@ public sealed class CarryableItem : MonoBehaviour
             if (!invalid) invalid = Vector3.Distance(player.transform.position, body.worldCenterOfMass) > 4.8f;
             if (invalid) cleanup.Add(player);
         }
+
         foreach (PlayerMover player in cleanup)
         {
             if (player != null)

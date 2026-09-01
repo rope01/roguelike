@@ -1,30 +1,54 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public sealed class FirstPersonBody : MonoBehaviour
 {
-    private const string CharacterResource = "Characters/Smooth_Male_Casual";
-
     private Transform firstPersonRoot;
+    private Transform firstPersonTorsoRoot;
     private Transform externalRoot;
-    private Transform externalModel;
-    private Transform externalTorso;
+    private Transform externalTorsoRoot;
+    private Transform externalHeadRoot;
 
-    private Transform leftUpperArm;
-    private Transform leftLowerArm;
-    private Transform rightUpperArm;
-    private Transform rightLowerArm;
-    private Transform leftHand;
-    private Transform rightHand;
-    private Transform leftUpperLeg;
-    private Transform leftLowerLeg;
-    private Transform rightUpperLeg;
-    private Transform rightLowerLeg;
-    private Transform leftBoot;
-    private Transform rightBoot;
+    private Transform fpLeftUpperArm;
+    private Transform fpLeftLowerArm;
+    private Transform fpRightUpperArm;
+    private Transform fpRightLowerArm;
+    private Transform fpLeftHand;
+    private Transform fpRightHand;
+    private Transform fpLeftUpperLeg;
+    private Transform fpLeftLowerLeg;
+    private Transform fpRightUpperLeg;
+    private Transform fpRightLowerLeg;
+    private Transform fpLeftBoot;
+    private Transform fpRightBoot;
+
+    private Transform extLeftUpperArm;
+    private Transform extLeftLowerArm;
+    private Transform extRightUpperArm;
+    private Transform extRightLowerArm;
+    private Transform extLeftHand;
+    private Transform extRightHand;
+    private Transform extLeftUpperLeg;
+    private Transform extLeftLowerLeg;
+    private Transform extRightUpperLeg;
+    private Transform extRightLowerLeg;
+    private Transform extLeftBoot;
+    private Transform extRightBoot;
+
+    private Material skinMaterial;
+    private Material orangeMaterial;
+    private Material overallsMaterial;
+    private Material gloveMaterial;
+    private Material bootMaterial;
+    private Material hairMaterial;
+    private Material moustacheMaterial;
+    private Material goggleFrameMaterial;
+    private Material goggleLensMaterial;
+    private Material reflectiveMaterial;
+    private Material eyeWhiteMaterial;
+    private Material pupilMaterial;
 
     private PlayerMover mover;
-    private CharacterAnimationDriver animationDriver;
-    private Vector3 torsoBaseScale;
     private float movement;
     private float strafe;
     private float gait;
@@ -43,114 +67,174 @@ public sealed class FirstPersonBody : MonoBehaviour
     private void Awake()
     {
         mover = GetComponent<PlayerMover>();
-        BuildFirstPersonLimbs();
+        BuildMaterials();
+        BuildFirstPersonBody();
         BuildExternalMover();
         ApplyVisibility();
     }
 
     private void Start() => mover = GetComponent<PlayerMover>();
 
-    private void BuildFirstPersonLimbs()
+    private void BuildMaterials()
     {
-        firstPersonRoot = new GameObject("First-person arms and legs only").transform;
+        skinMaterial = CreateMaterial(new Color(0.83f, 0.49f, 0.29f), 0.28f);
+        orangeMaterial = CreateMaterial(new Color(0.96f, 0.24f, 0.025f), 0.36f);
+        overallsMaterial = CreateMaterial(new Color(0.035f, 0.115f, 0.23f), 0.28f);
+        gloveMaterial = CreateMaterial(new Color(0.075f, 0.055f, 0.04f), 0.26f);
+        bootMaterial = CreateMaterial(new Color(0.055f, 0.045f, 0.038f), 0.22f);
+        hairMaterial = CreateMaterial(new Color(0.17f, 0.095f, 0.05f), 0.25f);
+        moustacheMaterial = CreateMaterial(new Color(0.13f, 0.065f, 0.035f), 0.22f);
+        goggleFrameMaterial = CreateMaterial(new Color(0.12f, 0.14f, 0.15f), 0.46f);
+        reflectiveMaterial = CreateMaterial(new Color(0.78f, 0.79f, 0.73f), 0.58f);
+        eyeWhiteMaterial = CreateMaterial(new Color(0.92f, 0.90f, 0.82f), 0.34f);
+        pupilMaterial = CreateMaterial(new Color(0.055f, 0.07f, 0.065f), 0.30f);
+        goggleLensMaterial = CreateTransparentMaterial(new Color(0.65f, 0.78f, 0.80f, 0.38f), 0.82f);
+    }
+
+    private void BuildFirstPersonBody()
+    {
+        firstPersonRoot = new GameObject("First-person worker body").transform;
         firstPersonRoot.SetParent(transform, false);
 
-        Material orange = MoverMaterial(new Color(0.96f, 0.25f, 0.025f), 0.42f);
-        Material blue = MoverMaterial(new Color(0.035f, 0.16f, 0.34f), 0.34f);
-        Material gloves = MoverMaterial(new Color(0.075f, 0.055f, 0.040f), 0.30f);
-        Material boots = MoverMaterial(new Color(0.025f, 0.024f, 0.023f), 0.25f);
+        firstPersonTorsoRoot = new GameObject("Visible torso").transform;
+        firstPersonTorsoRoot.SetParent(firstPersonRoot, false);
 
-        leftUpperArm = Part(firstPersonRoot, "Left sleeve", PrimitiveType.Capsule, orange);
-        leftLowerArm = Part(firstPersonRoot, "Left forearm", PrimitiveType.Capsule, gloves);
-        rightUpperArm = Part(firstPersonRoot, "Right sleeve", PrimitiveType.Capsule, orange);
-        rightLowerArm = Part(firstPersonRoot, "Right forearm", PrimitiveType.Capsule, gloves);
-        leftHand = Part(firstPersonRoot, "Left glove", PrimitiveType.Sphere, gloves);
-        rightHand = Part(firstPersonRoot, "Right glove", PrimitiveType.Sphere, gloves);
-        leftUpperLeg = Part(firstPersonRoot, "Left thigh", PrimitiveType.Capsule, blue);
-        leftLowerLeg = Part(firstPersonRoot, "Left shin", PrimitiveType.Capsule, blue);
-        rightUpperLeg = Part(firstPersonRoot, "Right thigh", PrimitiveType.Capsule, blue);
-        rightLowerLeg = Part(firstPersonRoot, "Right shin", PrimitiveType.Capsule, blue);
-        leftBoot = Part(firstPersonRoot, "Left boot", PrimitiveType.Capsule, boots);
-        rightBoot = Part(firstPersonRoot, "Right boot", PrimitiveType.Capsule, boots);
+        Shape(firstPersonTorsoRoot, "Orange shirt", PrimitiveType.Sphere, orangeMaterial,
+            new Vector3(0f, 1.24f, 0.02f), new Vector3(0.74f, 0.54f, 0.48f));
+        Shape(firstPersonTorsoRoot, "Rounded overalls belly", PrimitiveType.Sphere, overallsMaterial,
+            new Vector3(0f, 0.98f, 0.03f), new Vector3(0.84f, 0.70f, 0.58f));
+        Shape(firstPersonTorsoRoot, "Overalls bib", PrimitiveType.Cube, overallsMaterial,
+            new Vector3(0f, 1.24f, 0.30f), new Vector3(0.48f, 0.34f, 0.055f));
+        Shape(firstPersonTorsoRoot, "Left suspender", PrimitiveType.Cube, overallsMaterial,
+            new Vector3(-0.23f, 1.39f, 0.27f), new Vector3(0.075f, 0.38f, 0.045f), Quaternion.Euler(-7f, 0f, -7f));
+        Shape(firstPersonTorsoRoot, "Right suspender", PrimitiveType.Cube, overallsMaterial,
+            new Vector3(0.23f, 1.39f, 0.27f), new Vector3(0.075f, 0.38f, 0.045f), Quaternion.Euler(-7f, 0f, 7f));
+        Shape(firstPersonTorsoRoot, "Reflective chest stripe", PrimitiveType.Cube, reflectiveMaterial,
+            new Vector3(0f, 1.34f, 0.333f), new Vector3(0.54f, 0.075f, 0.024f));
+
+        fpLeftUpperArm = Part(firstPersonRoot, "Left orange upper arm", PrimitiveType.Capsule, orangeMaterial);
+        fpLeftLowerArm = Part(firstPersonRoot, "Left orange forearm", PrimitiveType.Capsule, orangeMaterial);
+        fpRightUpperArm = Part(firstPersonRoot, "Right orange upper arm", PrimitiveType.Capsule, orangeMaterial);
+        fpRightLowerArm = Part(firstPersonRoot, "Right orange forearm", PrimitiveType.Capsule, orangeMaterial);
+        fpLeftHand = Part(firstPersonRoot, "Left work glove", PrimitiveType.Sphere, gloveMaterial);
+        fpRightHand = Part(firstPersonRoot, "Right work glove", PrimitiveType.Sphere, gloveMaterial);
+        fpLeftUpperLeg = Part(firstPersonRoot, "Left overalls thigh", PrimitiveType.Capsule, overallsMaterial);
+        fpLeftLowerLeg = Part(firstPersonRoot, "Left overalls shin", PrimitiveType.Capsule, overallsMaterial);
+        fpRightUpperLeg = Part(firstPersonRoot, "Right overalls thigh", PrimitiveType.Capsule, overallsMaterial);
+        fpRightLowerLeg = Part(firstPersonRoot, "Right overalls shin", PrimitiveType.Capsule, overallsMaterial);
+        fpLeftBoot = Part(firstPersonRoot, "Left safety boot", PrimitiveType.Capsule, bootMaterial);
+        fpRightBoot = Part(firstPersonRoot, "Right safety boot", PrimitiveType.Capsule, bootMaterial);
     }
 
     private void BuildExternalMover()
     {
-        externalRoot = new GameObject("Rigged mover character").transform;
+        externalRoot = new GameObject("Rounded procedural mover").transform;
         externalRoot.SetParent(transform, false);
 
-        GameObject source = Resources.Load<GameObject>(CharacterResource);
-        if (source == null)
-        {
-            Debug.LogError("Rigged mover model was not imported. Expected Resources/" + CharacterResource + ".fbx");
-            return;
-        }
+        externalTorsoRoot = new GameObject("Body mass").transform;
+        externalTorsoRoot.SetParent(externalRoot, false);
 
-        externalModel = Instantiate(source, externalRoot).transform;
-        externalModel.name = "Smooth rigged mover (CC0)";
-        externalModel.localPosition = Vector3.zero;
-        externalModel.localRotation = Quaternion.identity;
-        externalModel.localScale = Vector3.one;
+        Shape(externalTorsoRoot, "Orange work shirt", PrimitiveType.Sphere, orangeMaterial,
+            new Vector3(0f, 1.25f, 0f), new Vector3(0.82f, 0.62f, 0.60f));
+        Shape(externalTorsoRoot, "Large overalls belly", PrimitiveType.Sphere, overallsMaterial,
+            new Vector3(0f, 0.98f, 0f), new Vector3(0.92f, 0.76f, 0.68f));
+        Shape(externalTorsoRoot, "Overalls bib", PrimitiveType.Cube, overallsMaterial,
+            new Vector3(0f, 1.24f, 0.345f), new Vector3(0.54f, 0.38f, 0.055f));
+        Shape(externalTorsoRoot, "Left front suspender", PrimitiveType.Cube, overallsMaterial,
+            new Vector3(-0.25f, 1.40f, 0.31f), new Vector3(0.08f, 0.40f, 0.05f), Quaternion.Euler(-7f, 0f, -8f));
+        Shape(externalTorsoRoot, "Right front suspender", PrimitiveType.Cube, overallsMaterial,
+            new Vector3(0.25f, 1.40f, 0.31f), new Vector3(0.08f, 0.40f, 0.05f), Quaternion.Euler(-7f, 0f, 8f));
+        Shape(externalTorsoRoot, "Front reflective stripe", PrimitiveType.Cube, reflectiveMaterial,
+            new Vector3(0f, 1.34f, 0.378f), new Vector3(0.62f, 0.08f, 0.026f));
+        Shape(externalTorsoRoot, "Back reflective stripe", PrimitiveType.Cube, reflectiveMaterial,
+            new Vector3(0f, 1.34f, -0.378f), new Vector3(0.62f, 0.08f, 0.026f));
+        Shape(externalTorsoRoot, "Left reflective shoulder", PrimitiveType.Cube, reflectiveMaterial,
+            new Vector3(-0.31f, 1.46f, 0.16f), new Vector3(0.055f, 0.30f, 0.035f), Quaternion.Euler(-10f, 0f, -18f));
+        Shape(externalTorsoRoot, "Right reflective shoulder", PrimitiveType.Cube, reflectiveMaterial,
+            new Vector3(0.31f, 1.46f, 0.16f), new Vector3(0.055f, 0.30f, 0.035f), Quaternion.Euler(-10f, 0f, 18f));
 
-        NormalizeModelHeight(1.84f);
-        RecolorWorkClothes();
-        externalTorso = FindDeepChild(externalModel, "Torso");
-        if (externalTorso != null)
-        {
-            torsoBaseScale = externalTorso.localScale;
-            ApplyBeerBelly();
-        }
+        Shape(externalTorsoRoot, "Neck", PrimitiveType.Capsule, skinMaterial,
+            new Vector3(0f, 1.46f, 0f), new Vector3(0.25f, 0.20f, 0.25f));
 
-        Animator animator = externalModel.GetComponentInChildren<Animator>();
-        if (animator == null) animator = externalModel.gameObject.AddComponent<Animator>();
-        animationDriver = externalRoot.gameObject.AddComponent<CharacterAnimationDriver>();
-        animationDriver.Initialize(animator, Resources.LoadAll<AnimationClip>(CharacterResource));
-    }
+        externalHeadRoot = new GameObject("Head and PPE").transform;
+        externalHeadRoot.SetParent(externalTorsoRoot, false);
+        externalHeadRoot.localPosition = new Vector3(0f, 1.53f, 0f);
 
-    private void NormalizeModelHeight(float targetHeight)
-    {
-        if (!TryGetBounds(externalModel, out Bounds initial) || initial.size.y < 0.01f) return;
-        externalModel.localScale = Vector3.one * (targetHeight / initial.size.y);
-        if (!TryGetBounds(externalModel, out Bounds scaled)) return;
+        Shape(externalHeadRoot, "Head", PrimitiveType.Sphere, skinMaterial,
+            new Vector3(0f, 0.02f, 0.015f), new Vector3(0.58f, 0.50f, 0.52f));
+        Shape(externalHeadRoot, "Left ear", PrimitiveType.Sphere, skinMaterial,
+            new Vector3(-0.31f, 0.00f, 0.01f), new Vector3(0.15f, 0.19f, 0.12f));
+        Shape(externalHeadRoot, "Right ear", PrimitiveType.Sphere, skinMaterial,
+            new Vector3(0.31f, 0.00f, 0.01f), new Vector3(0.15f, 0.19f, 0.12f));
+        Shape(externalHeadRoot, "Large rounded nose", PrimitiveType.Sphere, skinMaterial,
+            new Vector3(0f, -0.01f, 0.286f), new Vector3(0.19f, 0.16f, 0.19f));
+        Shape(externalHeadRoot, "Left moustache", PrimitiveType.Sphere, moustacheMaterial,
+            new Vector3(-0.085f, -0.085f, 0.278f), new Vector3(0.21f, 0.085f, 0.085f), Quaternion.Euler(0f, 0f, -12f));
+        Shape(externalHeadRoot, "Right moustache", PrimitiveType.Sphere, moustacheMaterial,
+            new Vector3(0.085f, -0.085f, 0.278f), new Vector3(0.21f, 0.085f, 0.085f), Quaternion.Euler(0f, 0f, 12f));
 
-        Vector3 playerOrigin = transform.position;
-        externalModel.position += new Vector3(
-            playerOrigin.x - scaled.center.x,
-            playerOrigin.y - scaled.min.y,
-            playerOrigin.z - scaled.center.z);
-    }
+        Shape(externalHeadRoot, "Hair cap", PrimitiveType.Sphere, hairMaterial,
+            new Vector3(0f, 0.21f, -0.015f), new Vector3(0.50f, 0.16f, 0.47f));
+        Shape(externalHeadRoot, "Hair tuft left", PrimitiveType.Sphere, hairMaterial,
+            new Vector3(-0.12f, 0.29f, 0.02f), new Vector3(0.14f, 0.10f, 0.15f), Quaternion.Euler(0f, 0f, -18f));
+        Shape(externalHeadRoot, "Hair tuft center", PrimitiveType.Sphere, hairMaterial,
+            new Vector3(0.00f, 0.31f, 0.00f), new Vector3(0.14f, 0.10f, 0.15f));
+        Shape(externalHeadRoot, "Hair tuft right", PrimitiveType.Sphere, hairMaterial,
+            new Vector3(0.12f, 0.29f, -0.01f), new Vector3(0.14f, 0.10f, 0.15f), Quaternion.Euler(0f, 0f, 18f));
+        Shape(externalHeadRoot, "Back hair", PrimitiveType.Sphere, hairMaterial,
+            new Vector3(0f, 0.06f, -0.24f), new Vector3(0.49f, 0.24f, 0.16f));
 
-    private void RecolorWorkClothes()
-    {
-        Material orange = MoverMaterial(new Color(0.96f, 0.25f, 0.025f), 0.42f);
-        Material blue = MoverMaterial(new Color(0.035f, 0.16f, 0.34f), 0.34f);
-        Material boots = MoverMaterial(new Color(0.025f, 0.024f, 0.023f), 0.25f);
+        Shape(externalHeadRoot, "Left eye white", PrimitiveType.Sphere, eyeWhiteMaterial,
+            new Vector3(-0.13f, 0.055f, 0.266f), new Vector3(0.12f, 0.082f, 0.032f));
+        Shape(externalHeadRoot, "Right eye white", PrimitiveType.Sphere, eyeWhiteMaterial,
+            new Vector3(0.13f, 0.055f, 0.266f), new Vector3(0.12f, 0.082f, 0.032f));
+        Shape(externalHeadRoot, "Left pupil", PrimitiveType.Sphere, pupilMaterial,
+            new Vector3(-0.13f, 0.047f, 0.285f), new Vector3(0.043f, 0.043f, 0.016f));
+        Shape(externalHeadRoot, "Right pupil", PrimitiveType.Sphere, pupilMaterial,
+            new Vector3(0.13f, 0.047f, 0.285f), new Vector3(0.043f, 0.043f, 0.016f));
 
-        foreach (Renderer renderer in externalModel.GetComponentsInChildren<Renderer>(true))
-        {
-            string part = renderer.name.ToLowerInvariant();
-            if (part.Contains("shirt")) ReplaceMaterials(renderer, orange);
-            else if (part.Contains("pants")) ReplaceMaterials(renderer, blue);
-            else if (part.Contains("shoe")) ReplaceMaterials(renderer, boots);
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-            renderer.receiveShadows = true;
-        }
-    }
+        Shape(externalHeadRoot, "Left safety lens", PrimitiveType.Sphere, goggleLensMaterial,
+            new Vector3(-0.145f, 0.055f, 0.302f), new Vector3(0.27f, 0.18f, 0.026f));
+        Shape(externalHeadRoot, "Right safety lens", PrimitiveType.Sphere, goggleLensMaterial,
+            new Vector3(0.145f, 0.055f, 0.302f), new Vector3(0.27f, 0.18f, 0.026f));
+        Shape(externalHeadRoot, "Goggle bridge", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(0f, 0.055f, 0.321f), new Vector3(0.075f, 0.03f, 0.026f));
 
-    private static void ReplaceMaterials(Renderer renderer, Material material)
-    {
-        Material[] materials = renderer.sharedMaterials;
-        for (int i = 0; i < materials.Length; i++) materials[i] = material;
-        renderer.sharedMaterials = materials;
-    }
+        Shape(externalHeadRoot, "Left goggle top", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(-0.145f, 0.137f, 0.320f), new Vector3(0.29f, 0.022f, 0.022f));
+        Shape(externalHeadRoot, "Left goggle bottom", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(-0.145f, -0.027f, 0.320f), new Vector3(0.29f, 0.022f, 0.022f));
+        Shape(externalHeadRoot, "Left goggle outer", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(-0.285f, 0.055f, 0.320f), new Vector3(0.022f, 0.18f, 0.022f));
+        Shape(externalHeadRoot, "Left goggle inner", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(-0.005f, 0.055f, 0.320f), new Vector3(0.022f, 0.18f, 0.022f));
 
-    private void ApplyBeerBelly()
-    {
-        if (externalTorso == null) return;
-        externalTorso.localScale = new Vector3(
-            torsoBaseScale.x * 1.18f,
-            torsoBaseScale.y * 0.98f,
-            torsoBaseScale.z * 1.24f);
+        Shape(externalHeadRoot, "Right goggle top", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(0.145f, 0.137f, 0.320f), new Vector3(0.29f, 0.022f, 0.022f));
+        Shape(externalHeadRoot, "Right goggle bottom", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(0.145f, -0.027f, 0.320f), new Vector3(0.29f, 0.022f, 0.022f));
+        Shape(externalHeadRoot, "Right goggle outer", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(0.285f, 0.055f, 0.320f), new Vector3(0.022f, 0.18f, 0.022f));
+        Shape(externalHeadRoot, "Right goggle inner", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(0.005f, 0.055f, 0.320f), new Vector3(0.022f, 0.18f, 0.022f));
+
+        Shape(externalHeadRoot, "Left goggle arm", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(-0.305f, 0.065f, 0.09f), new Vector3(0.045f, 0.055f, 0.42f));
+        Shape(externalHeadRoot, "Right goggle arm", PrimitiveType.Cube, goggleFrameMaterial,
+            new Vector3(0.305f, 0.065f, 0.09f), new Vector3(0.045f, 0.055f, 0.42f));
+
+        extLeftUpperArm = Part(externalRoot, "Left orange upper arm", PrimitiveType.Capsule, orangeMaterial);
+        extLeftLowerArm = Part(externalRoot, "Left orange forearm", PrimitiveType.Capsule, orangeMaterial);
+        extRightUpperArm = Part(externalRoot, "Right orange upper arm", PrimitiveType.Capsule, orangeMaterial);
+        extRightLowerArm = Part(externalRoot, "Right orange forearm", PrimitiveType.Capsule, orangeMaterial);
+        extLeftHand = Part(externalRoot, "Left oversized work glove", PrimitiveType.Sphere, gloveMaterial);
+        extRightHand = Part(externalRoot, "Right oversized work glove", PrimitiveType.Sphere, gloveMaterial);
+        extLeftUpperLeg = Part(externalRoot, "Left overalls thigh", PrimitiveType.Capsule, overallsMaterial);
+        extLeftLowerLeg = Part(externalRoot, "Left overalls shin", PrimitiveType.Capsule, overallsMaterial);
+        extRightUpperLeg = Part(externalRoot, "Right overalls thigh", PrimitiveType.Capsule, overallsMaterial);
+        extRightLowerLeg = Part(externalRoot, "Right overalls shin", PrimitiveType.Capsule, overallsMaterial);
+        extLeftBoot = Part(externalRoot, "Left safety boot", PrimitiveType.Capsule, bootMaterial);
+        extRightBoot = Part(externalRoot, "Right safety boot", PrimitiveType.Capsule, bootMaterial);
     }
 
     public void SetPose(float moveAmount, float sideways, bool isGrounded, bool isCrouched, bool isSprinting, float ySpeed, float stunTime, bool isCarrying)
@@ -164,7 +248,6 @@ public sealed class FirstPersonBody : MonoBehaviour
         crouch = Mathf.MoveTowards(crouch, isCrouched ? 1f : 0f, Time.deltaTime * 7.5f);
         airborne = Mathf.MoveTowards(airborne, isGrounded ? 0f : 1f, Time.deltaTime * 9f);
         stun = Mathf.MoveTowards(stun, stunTime > 0f ? 1f : 0f, Time.deltaTime * 5f);
-        animationDriver?.SetState(movement, grounded, crouch > 0.45f, sprinting, verticalSpeed, carrying);
     }
 
     public void SetHandGrip(bool left, bool gripping)
@@ -197,52 +280,108 @@ public sealed class FirstPersonBody : MonoBehaviour
         if (mover == null || !modelVisible) return;
 
         gait += Time.deltaTime * Mathf.Lerp(5f, sprinting ? 13f : 9f, movement);
-        if (thirdPersonPreview) AnimateExternalModel();
-        else AnimateFirstPersonLimbs();
+        if (thirdPersonPreview) AnimateExternalMover();
+        else AnimateFirstPersonBody();
     }
 
-    private void AnimateExternalModel()
+    private void AnimateFirstPersonBody()
     {
-        externalRoot.localPosition = Vector3.zero;
-        externalRoot.localRotation = Quaternion.Euler(
-            stun * Mathf.Sin(Time.time * 9f) * 6f,
-            0f,
-            -strafe * 2.2f);
-        ApplyBeerBelly();
-    }
+        float carrySag = carrying ? 0.075f : 0f;
+        float hipDrop = crouch * 0.34f + carrySag;
+        float shoulderDrop = crouch * 0.32f + carrySag;
+        float bodyDrop = crouch * 0.32f + carrySag;
+        float bodyLean = carrying ? 7f : 0f;
+        float stunRoll = stun * Mathf.Sin(Time.time * 10f) * 7f;
 
-    private void AnimateFirstPersonLimbs()
-    {
+        firstPersonTorsoRoot.localPosition = new Vector3(0f, -bodyDrop, 0f);
+        firstPersonTorsoRoot.localRotation = Quaternion.Euler(bodyLean + crouch * 5f, 0f, -strafe * 1.6f + stunRoll);
+
         float step = grounded ? Mathf.Sin(gait) * movement : 0f;
         float jumpBend = airborne * Mathf.Clamp01(0.75f - verticalSpeed * 0.04f);
-        float liftLeft = grounded ? Mathf.Max(0f, Mathf.Sin(gait)) * 0.14f * movement : 0.16f + jumpBend * 0.18f;
-        float liftRight = grounded ? Mathf.Max(0f, -Mathf.Sin(gait)) * 0.14f * movement : 0.12f + jumpBend * 0.22f;
-        float bodyHeight = Mathf.Lerp(0f, -0.46f, crouch);
+        float liftLeft = grounded ? Mathf.Max(0f, Mathf.Sin(gait)) * 0.14f * movement : 0.15f + jumpBend * 0.19f;
+        float liftRight = grounded ? Mathf.Max(0f, -Mathf.Sin(gait)) * 0.14f * movement : 0.11f + jumpBend * 0.23f;
         float flop = stun * Mathf.Sin(Time.time * 10f) * 0.22f;
 
-        Vector3 leftHip = transform.TransformPoint(new Vector3(-0.18f, 0.78f + bodyHeight, 0.03f));
-        Vector3 rightHip = transform.TransformPoint(new Vector3(0.18f, 0.78f + bodyHeight, 0.03f));
-        Vector3 leftFoot = transform.TransformPoint(new Vector3(-0.18f, 0.08f, step * 0.23f + strafe * -0.05f));
-        Vector3 rightFoot = transform.TransformPoint(new Vector3(0.18f, 0.08f, -step * 0.23f + strafe * 0.05f));
+        Vector3 leftHip = transform.TransformPoint(new Vector3(-0.19f, 0.79f - hipDrop, 0.03f));
+        Vector3 rightHip = transform.TransformPoint(new Vector3(0.19f, 0.79f - hipDrop, 0.03f));
+        Vector3 leftFoot = transform.TransformPoint(new Vector3(-0.19f, 0.09f, step * 0.24f + strafe * -0.05f));
+        Vector3 rightFoot = transform.TransformPoint(new Vector3(0.19f, 0.09f, -step * 0.24f + strafe * 0.05f));
         leftFoot.y += liftLeft;
         rightFoot.y += liftRight;
+
         if (!grounded)
         {
-            leftFoot += transform.forward * (0.10f - jumpBend * 0.08f);
-            rightFoot += transform.forward * (-0.02f + jumpBend * 0.10f);
+            leftFoot += transform.forward * (0.09f - jumpBend * 0.08f);
+            rightFoot += transform.forward * (-0.03f + jumpBend * 0.11f);
         }
         if (stun > 0.01f)
         {
             leftFoot += transform.right * flop;
             rightFoot -= transform.right * flop;
         }
-        PoseLeg(leftHip, leftFoot, leftUpperLeg, leftLowerLeg, leftBoot, -1f);
-        PoseLeg(rightHip, rightFoot, rightUpperLeg, rightLowerLeg, rightBoot, 1f);
 
-        Vector3 leftShoulder = transform.TransformPoint(new Vector3(-0.34f, 1.39f + bodyHeight, 0.03f));
-        Vector3 rightShoulder = transform.TransformPoint(new Vector3(0.34f, 1.39f + bodyHeight, 0.03f));
-        PoseArm(leftShoulder, HandTarget(true, step, flop), leftUpperArm, leftLowerArm, leftHand, -1f, leftGripping);
-        PoseArm(rightShoulder, HandTarget(false, -step, -flop), rightUpperArm, rightLowerArm, rightHand, 1f, rightGripping);
+        PoseLeg(leftHip, leftFoot, fpLeftUpperLeg, fpLeftLowerLeg, fpLeftBoot, -1f, 0.215f, 0.19f, 0.23f);
+        PoseLeg(rightHip, rightFoot, fpRightUpperLeg, fpRightLowerLeg, fpRightBoot, 1f, 0.215f, 0.19f, 0.23f);
+
+        Vector3 leftShoulder = transform.TransformPoint(new Vector3(-0.36f, 1.39f - shoulderDrop, 0.03f));
+        Vector3 rightShoulder = transform.TransformPoint(new Vector3(0.36f, 1.39f - shoulderDrop, 0.03f));
+        PoseArm(leftShoulder, HandTarget(true, step, flop), fpLeftUpperArm, fpLeftLowerArm, fpLeftHand, -1f, leftGripping, 0.19f, 0.175f, 0.23f);
+        PoseArm(rightShoulder, HandTarget(false, -step, -flop), fpRightUpperArm, fpRightLowerArm, fpRightHand, 1f, rightGripping, 0.19f, 0.175f, 0.23f);
+    }
+
+    private void AnimateExternalMover()
+    {
+        float carrySag = carrying ? 0.08f : 0f;
+        float drop = crouch * 0.32f + carrySag;
+        float bodyLean = carrying ? 9f : 0f;
+        float stunRoll = stun * Mathf.Sin(Time.time * 9f) * 8f;
+        float breathing = Mathf.Sin(Time.time * 2.2f) * 0.006f;
+
+        externalTorsoRoot.localPosition = new Vector3(0f, -drop + breathing, 0f);
+        externalTorsoRoot.localRotation = Quaternion.Euler(bodyLean + crouch * 8f, 0f, -strafe * 2.4f + stunRoll);
+        externalHeadRoot.localRotation = Quaternion.Euler(-bodyLean * 0.28f - crouch * 3f, strafe * 2f, strafe * -2f - stunRoll * 0.25f);
+
+        float step = grounded ? Mathf.Sin(gait) * movement : 0f;
+        float stride = sprinting ? 0.33f : 0.25f;
+        float jumpBend = airborne * Mathf.Clamp01(0.75f - verticalSpeed * 0.04f);
+        float liftLeft = grounded ? Mathf.Max(0f, Mathf.Sin(gait)) * 0.16f * movement : 0.13f + jumpBend * 0.20f;
+        float liftRight = grounded ? Mathf.Max(0f, -Mathf.Sin(gait)) * 0.16f * movement : 0.10f + jumpBend * 0.24f;
+
+        Vector3 leftHip = transform.TransformPoint(new Vector3(-0.20f, 0.79f - drop * 0.88f, 0f));
+        Vector3 rightHip = transform.TransformPoint(new Vector3(0.20f, 0.79f - drop * 0.88f, 0f));
+        Vector3 leftFoot = transform.TransformPoint(new Vector3(-0.20f, 0.10f, step * stride + strafe * -0.05f));
+        Vector3 rightFoot = transform.TransformPoint(new Vector3(0.20f, 0.10f, -step * stride + strafe * 0.05f));
+        leftFoot.y += liftLeft;
+        rightFoot.y += liftRight;
+
+        if (!grounded)
+        {
+            leftFoot += transform.forward * (0.08f - jumpBend * 0.08f);
+            rightFoot += transform.forward * (-0.03f + jumpBend * 0.11f);
+        }
+
+        PoseLeg(leftHip, leftFoot, extLeftUpperLeg, extLeftLowerLeg, extLeftBoot, -1f, 0.24f, 0.205f, 0.25f);
+        PoseLeg(rightHip, rightFoot, extRightUpperLeg, extRightLowerLeg, extRightBoot, 1f, 0.24f, 0.205f, 0.25f);
+
+        Vector3 leftShoulder = transform.TransformPoint(new Vector3(-0.39f, 1.39f - drop, 0.02f));
+        Vector3 rightShoulder = transform.TransformPoint(new Vector3(0.39f, 1.39f - drop, 0.02f));
+        float armSwing = Mathf.Sin(gait) * movement * (sprinting ? 0.28f : 0.20f);
+
+        Vector3 leftHandTarget;
+        Vector3 rightHandTarget;
+        if (carrying)
+        {
+            leftHandTarget = transform.TransformPoint(new Vector3(-0.28f, 1.00f - drop, 0.58f));
+            rightHandTarget = transform.TransformPoint(new Vector3(0.28f, 1.00f - drop, 0.58f));
+        }
+        else
+        {
+            leftHandTarget = transform.TransformPoint(new Vector3(-0.43f, 0.90f - drop, -armSwing));
+            rightHandTarget = transform.TransformPoint(new Vector3(0.43f, 0.90f - drop, armSwing));
+        }
+
+        PoseArm(leftShoulder, leftHandTarget, extLeftUpperArm, extLeftLowerArm, extLeftHand, -1f, carrying, 0.215f, 0.195f, 0.255f);
+        PoseArm(rightShoulder, rightHandTarget, extRightUpperArm, extRightLowerArm, extRightHand, 1f, carrying, 0.215f, 0.195f, 0.255f);
     }
 
     private Vector3 HandTarget(bool left, float step, float flop)
@@ -252,29 +391,57 @@ public sealed class FirstPersonBody : MonoBehaviour
         if (gripping && grip != null) return grip.position;
 
         float side = left ? -1f : 1f;
-        Vector3 local = new Vector3(side * 0.36f, 0.94f - crouch * 0.34f, 0.08f - step * 0.18f);
+        Vector3 local = new Vector3(side * 0.38f, 0.94f - crouch * 0.31f - (carrying ? 0.06f : 0f), 0.08f - step * 0.18f);
         if (airborne > 0.01f) local += new Vector3(0f, -0.03f, 0.10f);
-        if (carrying) local += new Vector3(0f, 0.10f, 0.30f);
+        if (carrying) local += new Vector3(side * -0.07f, 0.10f, 0.31f);
         return transform.TransformPoint(local) + transform.right * flop;
     }
 
-    private void PoseArm(Vector3 shoulder, Vector3 handPosition, Transform upper, Transform lower, Transform hand, float side, bool gripping)
+    private void PoseArm(
+        Vector3 shoulder,
+        Vector3 handPosition,
+        Transform upper,
+        Transform lower,
+        Transform hand,
+        float side,
+        bool gripping,
+        float upperThickness,
+        float lowerThickness,
+        float handSize)
     {
         float reach = Vector3.Distance(shoulder, handPosition);
-        if (reach > 1.15f) handPosition = shoulder + (handPosition - shoulder).normalized * 1.15f;
-        Vector3 elbow = Vector3.Lerp(shoulder, handPosition, 0.48f) + transform.right * side * 0.22f + Vector3.down * 0.18f;
-        PoseLimb(upper, shoulder, elbow, 0.16f);
-        PoseLimb(lower, elbow, handPosition, 0.145f);
-        PoseBlock(hand, handPosition, transform.rotation * Quaternion.Euler(gripping ? 70f : 10f, 0f, side * 12f), new Vector3(0.20f, 0.17f, 0.22f));
+        if (reach > 1.18f) handPosition = shoulder + (handPosition - shoulder).normalized * 1.18f;
+        Vector3 elbow = Vector3.Lerp(shoulder, handPosition, 0.49f)
+            + transform.right * side * 0.23f
+            + Vector3.down * 0.17f
+            + transform.forward * (gripping ? 0.04f : 0f);
+
+        PoseLimb(upper, shoulder, elbow, upperThickness);
+        PoseLimb(lower, elbow, handPosition, lowerThickness);
+        PoseBlock(hand, handPosition, transform.rotation * Quaternion.Euler(gripping ? 68f : 12f, 0f, side * 11f),
+            new Vector3(handSize, handSize * 0.82f, handSize * 1.03f));
     }
 
-    private void PoseLeg(Vector3 hip, Vector3 foot, Transform upper, Transform lower, Transform boot, float side)
+    private void PoseLeg(
+        Vector3 hip,
+        Vector3 foot,
+        Transform upper,
+        Transform lower,
+        Transform boot,
+        float side,
+        float upperThickness,
+        float lowerThickness,
+        float bootSize)
     {
-        float crouchKnee = crouch * 0.18f + airborne * 0.08f;
-        Vector3 knee = Vector3.Lerp(hip, foot, 0.48f) + transform.forward * (0.13f + crouchKnee) + transform.right * side * 0.025f;
-        PoseLimb(upper, hip, knee, 0.20f);
-        PoseLimb(lower, knee, foot + Vector3.up * 0.08f, 0.175f);
-        PoseBlock(boot, foot + transform.forward * 0.09f, transform.rotation * Quaternion.Euler(90f, 0f, 0f), new Vector3(0.21f, 0.31f, 0.19f));
+        float crouchKnee = crouch * 0.20f + airborne * 0.08f + (carrying ? 0.055f : 0f);
+        Vector3 knee = Vector3.Lerp(hip, foot, 0.48f)
+            + transform.forward * (0.14f + crouchKnee)
+            + transform.right * side * 0.025f;
+
+        PoseLimb(upper, hip, knee, upperThickness);
+        PoseLimb(lower, knee, foot + Vector3.up * 0.085f, lowerThickness);
+        PoseBlock(boot, foot + transform.forward * 0.10f, transform.rotation * Quaternion.Euler(90f, 0f, 0f),
+            new Vector3(bootSize, bootSize * 1.48f, bootSize * 0.86f));
     }
 
     private Transform Part(Transform parent, string objectName, PrimitiveType primitive, Material material)
@@ -282,22 +449,69 @@ public sealed class FirstPersonBody : MonoBehaviour
         GameObject part = GameObject.CreatePrimitive(primitive);
         part.name = objectName;
         part.transform.SetParent(parent, false);
-        part.GetComponent<Renderer>().sharedMaterial = material;
+        Renderer renderer = part.GetComponent<Renderer>();
+        renderer.sharedMaterial = material;
+        renderer.shadowCastingMode = ShadowCastingMode.On;
+        renderer.receiveShadows = true;
         Collider collider = part.GetComponent<Collider>();
         if (collider != null) Destroy(collider);
         return part.transform;
     }
 
-    private static Material MoverMaterial(Color color, float smoothness)
+    private Transform Shape(
+        Transform parent,
+        string objectName,
+        PrimitiveType primitive,
+        Material material,
+        Vector3 localPosition,
+        Vector3 localScale,
+        Quaternion? localRotation = null)
+    {
+        Transform part = Part(parent, objectName, primitive, material);
+        part.localPosition = localPosition;
+        part.localRotation = localRotation ?? Quaternion.identity;
+        part.localScale = localScale;
+        return part;
+    }
+
+    private static Material CreateMaterial(Color color, float smoothness)
     {
         Shader shader = Shader.Find("Standard");
         if (shader == null) shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null) shader = Shader.Find("Unlit/Color");
+
         Material material = new Material(shader);
         material.color = color;
         if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
         if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);
         if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", smoothness);
         if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0f);
+        return material;
+    }
+
+    private static Material CreateTransparentMaterial(Color color, float smoothness)
+    {
+        Material material = CreateMaterial(color, smoothness);
+        material.color = color;
+        if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+
+        if (material.HasProperty("_Mode"))
+        {
+            material.SetFloat("_Mode", 3f);
+            material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+            material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+            material.SetInt("_ZWrite", 0);
+            material.DisableKeyword("_ALPHATEST_ON");
+            material.EnableKeyword("_ALPHABLEND_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            material.renderQueue = 3000;
+        }
+        if (material.HasProperty("_Surface"))
+        {
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_Blend", 0f);
+            material.renderQueue = 3000;
+        }
         return material;
     }
 
@@ -315,26 +529,5 @@ public sealed class FirstPersonBody : MonoBehaviour
         part.position = position;
         part.rotation = rotation;
         part.localScale = scale;
-    }
-
-    private static Transform FindDeepChild(Transform root, string objectName)
-    {
-        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-            if (child.name.Equals(objectName, System.StringComparison.OrdinalIgnoreCase)) return child;
-        return null;
-    }
-
-    private static bool TryGetBounds(Transform root, out Bounds bounds)
-    {
-        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
-        if (renderers.Length == 0)
-        {
-            bounds = default;
-            return false;
-        }
-
-        bounds = renderers[0].bounds;
-        for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
-        return true;
     }
 }

@@ -138,19 +138,25 @@ public sealed class PrototypeWorld : MonoBehaviour
     {
         GameObject player = new GameObject("First-person mover");
         player.transform.position = new Vector3(-47f, 0.1f, 9f);
+
         CharacterController controller = player.AddComponent<CharacterController>();
         controller.height = 1.85f;
-        controller.radius = 0.36f;
-        controller.center = new Vector3(0f, 0.93f, 0f);
+        controller.radius = 0.38f;
+        controller.center = new Vector3(0f, 0.925f, 0f);
+        controller.stepOffset = 0.32f;
+        controller.slopeLimit = 48f;
 
-        GameObject cameraObject = new GameObject("First-person camera");
+        GameObject cameraObject = new GameObject("Eye camera");
         cameraObject.tag = "MainCamera";
         cameraObject.transform.SetParent(player.transform, false);
-        cameraObject.transform.localPosition = new Vector3(0f, 1.62f, 0.08f);
+        cameraObject.transform.localPosition = new Vector3(0f, 1.67f, 0.12f);
         Camera camera = cameraObject.AddComponent<Camera>();
         camera.fieldOfView = 78f;
-        camera.nearClipPlane = 0.06f;
+        camera.nearClipPlane = 0.035f;
         cameraObject.AddComponent<AudioListener>();
+
+        player.AddComponent<PlayerLoadResponse>();
+        player.AddComponent<ProceduralHandIK>();
         player.AddComponent<FirstPersonBody>();
         player.AddComponent<PlayerMover>();
     }

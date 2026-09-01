@@ -23,6 +23,9 @@ public sealed class PlayerMover : MonoBehaviour
     private float cameraRoll;
     private float stepCycle;
     private bool wasGrounded;
+    private bool thirdPersonPreview;
+    private float previewYaw;
+    private float previewElevation = 18f;
 
     public static PlayerMover Local { get; private set; }
     public Transform GrabPoint => leftGripPoint;
@@ -67,6 +70,7 @@ public sealed class PlayerMover : MonoBehaviour
             return;
         }
 
+        if (Input.GetKeyDown(KeyCode.V)) TogglePerspectivePreview();
         Look();
         UpdateGripReach();
         if (stunRemaining > 0f)
@@ -81,7 +85,7 @@ public sealed class PlayerMover : MonoBehaviour
         Vector3 moveInput = ReadMovement();
         bool sprinting = Input.GetKey(KeyCode.LeftShift) && !crouched && moveInput.sqrMagnitude > 0.1f && stamina > 0.04f && !IsCarrying;
         Move(moveInput, sprinting, crouched);
-        HandleHands();
+        if (!thirdPersonPreview) HandleHands();
         if (Input.GetKeyDown(KeyCode.F)) TryEnterVan();
         UpdateCamera(moveInput, sprinting, crouched);
     }
@@ -140,6 +144,12 @@ public sealed class PlayerMover : MonoBehaviour
         if (Cursor.lockState != CursorLockMode.Locked) return;
         float x = Input.GetAxis("Mouse X") * 2.0f;
         float y = Input.GetAxis("Mouse Y") * 2.0f;
+        if (thirdPersonPreview)
+        {
+            previewYaw += x;
+            previewElevation = Mathf.Clamp(previewElevation - y, -8f, 42f);
+            return;
+        }
         pitch = Mathf.Clamp(pitch - y, -82f, 82f);
         if (drivingVan == null) transform.Rotate(Vector3.up * x);
         else view.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
@@ -153,9 +163,31 @@ public sealed class PlayerMover : MonoBehaviour
         float sideBob = controller.isGrounded ? Mathf.Cos(stepCycle * 0.5f) * 0.018f * movement : 0f;
         float targetHeight = crouched ? 1.08f : 1.62f;
         Vector3 target = new Vector3(sideBob, targetHeight + bob, originalCameraPosition.z);
+        if (thirdPersonPreview)
+        {
+            Vector3 orbit = Quaternion.Euler(previewElevation, previewYaw, 0f) * new Vector3(0f, 0f, -4.4f);
+            target = new Vector3(0f, 1.20f, 0f) + orbit;
+        }
         view.transform.localPosition = Vector3.Lerp(view.transform.localPosition, target, Time.deltaTime * 12f);
         cameraRoll = Mathf.Lerp(cameraRoll, IsStunned ? Mathf.Sin(Time.time * 8f) * 18f : -Vector3.Dot(input, transform.right) * 1.8f, Time.deltaTime * 7f);
-        view.transform.localRotation = Quaternion.Euler(pitch, 0f, cameraRoll);
+        if (thirdPersonPreview)
+        {
+            Quaternion lookAtCharacter = Quaternion.LookRotation(new Vector3(0f, 1.20f, 0f) - view.transform.localPosition, Vector3.up);
+            view.transform.localRotation = Quaternion.Slerp(view.transform.localRotation, lookAtCharacter, Time.deltaTime * 14f);
+        }
+        else view.transform.localRotation = Quaternion.Euler(pitch, 0f, cameraRoll);
+    }
+
+    private void TogglePerspectivePreview()
+    {
+        if (IsCarrying) ReleaseAllHands();
+        thirdPersonPreview = !thirdPersonPreview;
+        if (thirdPersonPreview)
+        {
+            previewYaw = 0f;
+            previewElevation = 18f;
+        }
+        bodyRig?.SetThirdPersonPreview(thirdPersonPreview);
     }
 
     private void HandleHands()
@@ -246,6 +278,8 @@ public sealed class PlayerMover : MonoBehaviour
     private void BeginDriving(VanController van)
     {
         ReleaseAllHands();
+        thirdPersonPreview = false;
+        bodyRig?.SetThirdPersonPreview(false);
         drivingVan = van;
         enteredVanAt = Time.time;
         controller.enabled = false;

@@ -50,7 +50,7 @@ public sealed class JobHUD : MonoBehaviour
             "   Stamina: " + Mathf.RoundToInt(player.Stamina * 100f) + "%   Hand reach: " + player.GripReach.ToString("0.0") + "m";
         GUI.Label(new Rect(24f, Screen.height - 92f, 1000f, 74f),
             "LMB left hand   RMB right hand   Mouse wheel reach   E release both" + physicalState +
-            "\nWASD move   Shift sprint   Ctrl crouch   Space jump   F drive   R restart\nSOFA + FRIDGE require TWO DIFFERENT MOVERS", helpStyle);
+            "\nWASD move   Shift sprint   Ctrl crouch   Space jump   F drive   V inspect character   R restart\nSOFA + FRIDGE require TWO DIFFERENT MOVERS", helpStyle);
         GUI.Label(new Rect(Screen.width * 0.5f - 8f, Screen.height * 0.5f - 14f, 20f, 28f), "+", titleStyle);
     }
 }

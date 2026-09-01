@@ -7,6 +7,7 @@ public sealed class PlayerMover : MonoBehaviour
     private CharacterController controller;
     private Camera view;
     private FirstPersonBody bodyRig;
+    private MoverLoadResponse loadResponse;
     private CarryableItem leftItem;
     private CarryableItem rightItem;
     private VanController drivingVan;
@@ -14,6 +15,7 @@ public sealed class PlayerMover : MonoBehaviour
     private Transform rightGripPoint;
     private Transform originalCameraParent;
     private Vector3 originalCameraPosition;
+    private Vector3 planarVelocity;
     private float verticalVelocity;
     private float pitch;
     private float stamina = 1f;
@@ -32,6 +34,8 @@ public sealed class PlayerMover : MonoBehaviour
     public float GripReach => gripReach;
     public bool IsStunned => stunRemaining > 0f;
     public bool IsCarrying => leftItem != null || rightItem != null;
+    public float LoadFactor => loadResponse != null ? loadResponse.LoadFactor : 0f;
+    public MoverLoadResponse LoadResponse => loadResponse;
 
     private void Awake()
     {
@@ -39,10 +43,13 @@ public sealed class PlayerMover : MonoBehaviour
         controller = GetComponent<CharacterController>();
         view = GetComponentInChildren<Camera>();
         bodyRig = GetComponent<FirstPersonBody>();
+        loadResponse = GetComponent<MoverLoadResponse>();
+        if (loadResponse == null) loadResponse = gameObject.AddComponent<MoverLoadResponse>();
+
         originalCameraParent = view.transform.parent;
         originalCameraPosition = view.transform.localPosition;
-        leftGripPoint = CreateGripPoint("Left physical hand", -0.32f);
-        rightGripPoint = CreateGripPoint("Right physical hand", 0.32f);
+        leftGripPoint = CreateGripPoint("Left physical hand anchor", -0.32f);
+        rightGripPoint = CreateGripPoint("Right physical hand anchor", 0.32f);
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
@@ -68,7 +75,9 @@ public sealed class PlayerMover : MonoBehaviour
         }
 
         Look();
+        UpdateLoadResponse();
         UpdateGripReach();
+
         if (stunRemaining > 0f)
         {
             stunRemaining -= Time.deltaTime;
@@ -103,7 +112,9 @@ public sealed class PlayerMover : MonoBehaviour
         bool grounded = controller.isGrounded;
         if (grounded)
         {
-            if (!wasGrounded && verticalVelocity < -10.5f) Stumble(Mathf.InverseLerp(-10.5f, -22f, verticalVelocity), -transform.forward);
+            if (!wasGrounded && verticalVelocity < -10.5f)
+                Stumble(Mathf.InverseLerp(-10.5f, -22f, verticalVelocity), -transform.forward);
+
             verticalVelocity = -1.7f;
             if (Input.GetKeyDown(KeyCode.Space) && !crouched && !IsCarrying) verticalVelocity = 5.2f;
         }
@@ -115,14 +126,28 @@ public sealed class PlayerMover : MonoBehaviour
         {
             int required = Mathf.Max(leftItem != null ? leftItem.MinimumCarriers : 1, rightItem != null ? rightItem.MinimumCarriers : 1);
             int carriers = Mathf.Max(leftItem != null ? leftItem.HolderCount : 0, rightItem != null ? rightItem.HolderCount : 0);
-            speed *= carriers < required ? 0.28f : 0.67f;
+            speed *= carriers < required ? 0.28f : 0.92f;
+            speed *= loadResponse != null ? loadResponse.MoveSpeedMultiplier : 1f;
         }
+
         if (sprinting) stamina = Mathf.Max(0f, stamina - Time.deltaTime * 0.24f);
         else stamina = Mathf.Min(1f, stamina + Time.deltaTime * (IsCarrying ? 0.10f : 0.18f));
 
-        Vector3 velocity = input * speed;
+        Vector3 targetPlanar = input * speed;
+        float acceleration = grounded ? 28f : 9f;
+        float deceleration = grounded ? 34f : 11f;
+        if (loadResponse != null && IsCarrying)
+        {
+            acceleration *= loadResponse.AccelerationMultiplier;
+            deceleration *= Mathf.Lerp(1f, 0.48f, loadResponse.LoadFactor);
+        }
+
+        float changeRate = targetPlanar.sqrMagnitude > planarVelocity.sqrMagnitude ? acceleration : deceleration;
+        planarVelocity = Vector3.MoveTowards(planarVelocity, targetPlanar, changeRate * Time.deltaTime);
+
+        Vector3 velocity = planarVelocity;
         velocity.y = verticalVelocity;
-        controller.height = Mathf.MoveTowards(controller.height, crouched ? 1.25f : 1.85f, Time.deltaTime * 5f);
+        controller.height = Mathf.MoveTowards(controller.height, crouched ? 1.25f : 1.82f, Time.deltaTime * 5f);
         controller.center = new Vector3(0f, controller.height * 0.5f, 0f);
         controller.Move(velocity * Time.deltaTime);
         bodyRig?.SetPose(input.magnitude, Vector3.Dot(input, transform.right), grounded, crouched, sprinting, stunRemaining, IsCarrying);
@@ -131,6 +156,7 @@ public sealed class PlayerMover : MonoBehaviour
     private void MoveStunned()
     {
         verticalVelocity += Physics.gravity.y * Time.deltaTime;
+        planarVelocity = Vector3.MoveTowards(planarVelocity, Vector3.zero, Time.deltaTime * 8f);
         controller.Move((Vector3.down * 1.5f + transform.right * Mathf.Sin(Time.time * 9f) * 0.25f) * Time.deltaTime);
         bodyRig?.SetPose(0f, 0f, controller.isGrounded, true, false, stunRemaining, false);
     }
@@ -140,7 +166,7 @@ public sealed class PlayerMover : MonoBehaviour
         if (Cursor.lockState != CursorLockMode.Locked) return;
         float x = Input.GetAxis("Mouse X") * 2.0f;
         float y = Input.GetAxis("Mouse Y") * 2.0f;
-        pitch = Mathf.Clamp(pitch - y, -82f, 82f);
+        pitch = Mathf.Clamp(pitch - y, -84f, 84f);
         if (drivingVan == null) transform.Rotate(Vector3.up * x);
         else view.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
     }
@@ -149,12 +175,20 @@ public sealed class PlayerMover : MonoBehaviour
     {
         float movement = new Vector3(input.x, 0f, input.z).magnitude;
         if (controller.isGrounded) stepCycle += movement * Time.deltaTime * (sprinting ? 13f : 9f);
-        float bob = controller.isGrounded ? Mathf.Sin(stepCycle) * 0.025f * movement : 0f;
-        float sideBob = controller.isGrounded ? Mathf.Cos(stepCycle * 0.5f) * 0.018f * movement : 0f;
-        float targetHeight = crouched ? 1.08f : 1.62f;
+
+        float load = loadResponse != null ? loadResponse.LoadFactor : 0f;
+        float bobScale = Mathf.Lerp(1f, 0.62f, load);
+        float bob = controller.isGrounded ? Mathf.Sin(stepCycle) * 0.022f * movement * bobScale : 0f;
+        float sideBob = controller.isGrounded ? Mathf.Cos(stepCycle * 0.5f) * 0.015f * movement * bobScale : 0f;
+        float loadSag = loadResponse != null ? loadResponse.BodySag * 0.34f : 0f;
+        float targetHeight = (crouched ? 1.08f : 1.68f) - loadSag;
         Vector3 target = new Vector3(sideBob, targetHeight + bob, originalCameraPosition.z);
         view.transform.localPosition = Vector3.Lerp(view.transform.localPosition, target, Time.deltaTime * 12f);
-        cameraRoll = Mathf.Lerp(cameraRoll, IsStunned ? Mathf.Sin(Time.time * 8f) * 18f : -Vector3.Dot(input, transform.right) * 1.8f, Time.deltaTime * 7f);
+
+        float carryingRoll = loadResponse != null ? Mathf.Sin(Time.time * 3.3f) * loadResponse.SwayAmount * 18f : 0f;
+        cameraRoll = Mathf.Lerp(cameraRoll,
+            IsStunned ? Mathf.Sin(Time.time * 8f) * 18f : -Vector3.Dot(input, transform.right) * 1.8f + carryingRoll,
+            Time.deltaTime * 7f);
         view.transform.localRotation = Quaternion.Euler(pitch, 0f, cameraRoll);
     }
 
@@ -174,6 +208,7 @@ public sealed class PlayerMover : MonoBehaviour
             SetHeld(left, null);
             return;
         }
+
         if (!Physics.Raycast(view.transform.position, view.transform.forward, out RaycastHit hit, gripReach + 1.2f, ~0, QueryTriggerInteraction.Ignore)) return;
         CarryableItem item = hit.collider.GetComponentInParent<CarryableItem>();
         Transform anchor = left ? leftGripPoint : rightGripPoint;
@@ -185,14 +220,57 @@ public sealed class PlayerMover : MonoBehaviour
         if (left) leftItem = item;
         else rightItem = item;
         bodyRig?.SetHandGrip(left, item != null);
+        UpdateLoadResponse();
     }
 
     private void UpdateGripReach()
     {
         float wheel = Input.mouseScrollDelta.y;
         if (!Mathf.Approximately(wheel, 0f)) gripReach = Mathf.Clamp(gripReach + wheel * 0.18f, 0.85f, 2.45f);
-        leftGripPoint.localPosition = new Vector3(-0.32f, -0.30f, gripReach);
-        rightGripPoint.localPosition = new Vector3(0.32f, -0.30f, gripReach);
+
+        float handDrop = loadResponse != null ? loadResponse.HandDrop : 0f;
+        float sway = loadResponse != null ? Mathf.Sin(Time.time * 3.4f) * loadResponse.SwayAmount : 0f;
+        leftGripPoint.localPosition = new Vector3(-0.32f - sway, -0.30f - handDrop * 0.65f, gripReach);
+        rightGripPoint.localPosition = new Vector3(0.32f + sway, -0.30f - handDrop * 0.65f, gripReach);
+    }
+
+    private void UpdateLoadResponse()
+    {
+        if (loadResponse == null) return;
+        GetCarriedMassAndCenter(out float mass, out Vector3 center);
+        loadResponse.SetLoad(mass, center, IsCarrying);
+    }
+
+    private void GetCarriedMassAndCenter(out float totalMass, out Vector3 center)
+    {
+        totalMass = 0f;
+        center = transform.position + transform.forward;
+
+        if (leftItem != null)
+        {
+            totalMass += leftItem.Mass;
+            center = leftItem.WorldCenterOfMass;
+        }
+
+        if (rightItem != null && rightItem != leftItem)
+        {
+            float previousMass = totalMass;
+            totalMass += rightItem.Mass;
+            center = previousMass <= 0f
+                ? rightItem.WorldCenterOfMass
+                : (center * previousMass + rightItem.WorldCenterOfMass * rightItem.Mass) / totalMass;
+        }
+    }
+
+    public CarryableItem GetHeldItem(bool left) => left ? leftItem : rightItem;
+
+    public bool TryGetVisualHandContact(bool left, out Vector3 position, out Vector3 normal)
+    {
+        CarryableItem item = left ? leftItem : rightItem;
+        if (item != null) return item.TryGetHandContact(this, left, out position, out normal);
+        position = Vector3.zero;
+        normal = Vector3.up;
+        return false;
     }
 
     public void ForceRelease(CarryableItem item, bool left)
